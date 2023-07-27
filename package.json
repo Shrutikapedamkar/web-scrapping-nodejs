@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "axios": "^1.4.0",
+    "cheerio": "^1.0.0-rc.12",
+    "knwl.js": "^1.0.2",
+    "request": "^2.88.2"
+  }
+}
