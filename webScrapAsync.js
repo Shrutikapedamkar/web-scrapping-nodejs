@@ -57,24 +57,17 @@ function fetchClientData(clientWebsites) {
     .then(() => clientData);
 }
 
-function getEmailsFromFile(filePath) {
-  const emailAddresses = fs.readFileSync(filePath, 'utf8');
-  return emailAddresses.split('\n');
-}
-
 function getWebsiteUrls(emails) {
-  const regexEmail = /[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/;
   return emails
     .map((email) => {
-      const emailMatch = email.match(regexEmail);
+      const emailMatch = email.match(/[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/);
       return emailMatch ? `http://www.${emailMatch[1]}` : null;
     })
     .filter((website) => website !== null);
 }
 
 function main() {
-  const filePath = 'email_addresses.txt';
-  const emailAddresses = getEmailsFromFile(filePath);
+  const emailAddresses = fs.readFileSync('email_addresses.txt', 'utf8');
   const clientWebsites = getWebsiteUrls(emailAddresses);
   fetchClientData(clientWebsites)
     .then((clientData) => {
