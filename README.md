@@ -2,11 +2,11 @@
 
 Configurations required:
 
-npm install cheerio
+npm install cheerio  <br />
 
-npm install request
+npm install request  <br />
 
-npm install axios
+npm install axios  <br />
 
-npm install knwl.js
+npm install knwl.js  <br />
 
