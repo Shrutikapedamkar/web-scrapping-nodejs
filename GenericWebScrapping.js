@@ -1,130 +1,129 @@
 const fs = require('fs');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const Knwl = require('knwl.js');
 
-const Company_PhoneNumber = /(\+\d{1,3}\s?(\s\(0\))?|0)(\d{3}\s?\d{3}\s?\d{4}|\d{4}\s?\d{6})(?![0-9])/;
-const emailReg = /[A-Za-z][A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z]{3}|(\.[A-Za-z]{2}){2})/;
+const phoneRegex = /(\+\d{1,3}\s?(\s\(0\))?|0)(\d{3}\s?\d{3}\s?\d{4}|\d{4}\s?\d{6})(?![0-9])/;
+const additionalEmailReg = /[A-Za-z][A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z]{3}|(\.[A-Za-z]{2}){2})/;
 const postCodeReg = /^([Gg][Ii][Rr] 0[Aa]{2})|((([A-Za-z][0-9]{1,2})|(([A-Za-z][A-Ha-hJ-Yj-y][0-9]{1,2})|(([A-Za-z][0-9][A-Za-z])|([A-Za-z][A-Ha-hJ-Yj-y][0-9]?[A-Za-z])))) [0-9][A-Za-z]{2})/;
+const emailReg = /^[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})$/;
 
-async function extractCompanyData(websites) {
-  const companyData = [];
 
-  for (const website of websites) {
-    try {
-      const response = await axios.get(website);
-      const html = response.data;
-
-      const companyName = extractCompanyName(html);
-      const Company_Email = extractEmailId(html);
-      const postcode = extractCompanyAddress(html);
-      const address = await getAddressFromPostcode(postcode); // Get address based on postcode
-      const Company_PhoneNumber = extractPhoneNumber(html);
-
-      companyData.push({
-        websiteUrl: website,
-        companyName: companyName,
-        Company_Email: Company_Email,
-        Company_PostCode: postcode,
-        Company_Address: address,
-        Company_PhoneNumber: Company_PhoneNumber,
-      });
-    } catch (error) {
-      console.error(`Error scraping data from ${website}: ${error.message}`);
-      companyData.push({
-        websiteUrl: website,
-        companyName: 'N/A',
-        Company_Email: 'N/A',
-        Company_PostCode: 'N/A',
-        Company_Address: 'N/A',
-        Company_PhoneNumber: 'N/A',
-      });
-    }
-
-    // Introduce a small delay between requests to avoid overwhelming the server
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+async function extractCompanyData(websiteURL, emailID) {
+    
+      try {
+        const response = await axios.get(websiteURL);
+        const html = response.data;
+  
+        const companyName = getCompanyName(html, emailID);
+        const postcode = getCompanyPostcode(html);
+        const address = await getAddressFromPostcode(postcode); 
+        const Company_PhoneNumber = getCompanyPhone(html);
+  
+        console.log("\x1b[1mCompany's Name: \x1b[0m" , companyName);
+        console.log("\x1b[1mCompany's Email Address: \x1b[0m", emailID);
+        console.log("\x1b[1mCompany's Website: \x1b[0m", websiteURL);
+        console.log("\x1b[1mCompany's Contact: \x1b[0m", Company_PhoneNumber);
+        getAdditionalEmailID(html);
+        console.log("\x1b[1mCompany's Postcode: \x1b[0m", postcode);
+        console.log("\x1b[1mCompany's Address: \x1b[0m", address);
+        console.log("---------------------------------------------------------");
+  
+        
+      } catch (error) {
+        console.error(`Error scraping data from ${website}: ${error.message}`);
+        console.log("---------------------------------------------------------");
+        
+      }
+  
+      // Adding a small delay between requests to avoid overwhelming the server
+      await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
-  return companyData;
-}
+  function getCompanyName(html, emailDomain) {
 
-async function getAddressFromPostcode(postcode) {
-  try {
-    const response = await axios.get(`https://api.postcodes.io/postcodes/${postcode}`);
-    const data = response.data;
-    if (data.status === 200 && data.result) {
-      const { postcode, region, country, admin_district, parish } = data.result; // Use unique names for each variable
-      return {
-        postcode: postcode,
-        region: region,
-        country: country,
-        admin_district: admin_district,
-        parish: parish,
-      };
-    } else {
-      console.error(`Error fetching address for postcode ${postcode}`);
+    const $ = cheerio.load(html);
+
+    // Define possible selectors for company names
+    const titleTagMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
+    let companyName = titleTagMatch ? titleTagMatch[1].trim() : 'N/A';
+    if (companyName.toLowerCase().includes('home') 
+        && companyName.toLowerCase().includes(emailDomain.toLowerCase())) {
+      companyName = companyName.replace(/home/gi, '').trim();
+    }
+    return companyName;
+
+  }
+  
+
+  async function getAddressFromPostcode(postcode) {
+    try {
+      const response = await axios.get(`https://api.postcodes.io/postcodes/${postcode}`);
+      const data = response.data;
+      if (data.status === 200 && data.result) {
+        const { postcode, region, country, admin_district, locality } = data.result; 
+        return {
+          postcode: postcode,
+          region: region,
+          country: country,
+          admin_district: admin_district,
+          locality: locality,
+        };
+      } else {
+        console.error(`Error fetching address for postcode ${postcode}`);
+        return 'N/A';
+      }
+    } catch (error) {
+      console.error(`Error fetching address for postcode ${postcode}: ${error.message}`);
       return 'N/A';
     }
-  } catch (error) {
-    console.error(`Error fetching address for postcode ${postcode}: ${error.message}`);
-    return 'N/A';
   }
-}
-
-function extractData(html, regex) {
-  const data = html.match(regex);
-  return data ? data[0] : 'N/A';
-}
-
-function extractCompanyName(html) {
-  const titleTagMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
-  let companyName = titleTagMatch ? titleTagMatch[1].trim() : 'N/A';
-  if (companyName.toLowerCase().includes('home')) {
-    companyName = companyName.replace(/home/gi, '').trim();
+  
+  function extractData(html, regex) {
+    const data = html.match(regex);
+    return data ? data[0] : 'N/A';
   }
-  return companyName;
-}
-
-function extractEmailId(html) {
-  return extractData(html, emailReg);
-}
-
-function extractCompanyAddress(html) {
-  return extractData(html, postCodeReg);
-}
-
-function extractPhoneNumber(html) {
-  return extractData(html, Company_PhoneNumber);
-}
-
-function readEmailAddressesFromFile(filePath) {
-  return fs.readFileSync(filePath, 'utf8'); // Explicitly specify the file encoding as 'utf8'
-}
+  
+  
+  function getAdditionalEmailID(html) {
+     // Using Knwl to find additional email addresses from the web page
+     const knwlInstance = new Knwl();
+      knwlInstance.init(html);
+      const additionalEmails = knwlInstance.get('emails');
+      if (additionalEmails.length > 0) {
+        console.log('\x1b[1mAdditional Email Addresses:\x1b[01m');
+        const uniqueEmailsSet = new Set();
+        // Add each email address to the Set and remove duplicates
+        additionalEmails.forEach((email) => uniqueEmailsSet.add(email.address));
+        uniqueEmailsSet.forEach((email) => console.log(email));
+      }
+  }
+  
+  function getCompanyPostcode(html) {
+    return extractData(html, postCodeReg);
+  }
+  
+  function getCompanyPhone(html) {
+    return extractData(html, phoneRegex);
+  }
 
 async function main() {
-  try {
-    // Specify the path to the file containing email addresses
-    const filePath = 'email_addresses.txt';
+    try {
+  
+      const emailAddresses = fs.readFileSync('email_addresses.txt', 'utf8');
+      const emailLines = emailAddresses.split(/\r?\n/); 
 
-    // Read email addresses from the file
-    const emailAddresses = readEmailAddressesFromFile(filePath);
-    const emailLines = emailAddresses.split(/\r?\n/); // Use regex to split lines to handle both macOS and Windows line endings
-
-    const websites = [];
-
-    for (const emailLine of emailLines) {
-      const match = emailLine.match(/^[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})$/);
-      if (match && match.length >= 2) {
-        const websiteUrl = `http://www.${match[1]}`;
-        websites.push(websiteUrl);
+      for (const emailLine of emailLines) {
+        const match = emailLine.match(emailReg);
+        if (match && match.length >= 2) {
+          const websiteUrl = `http://www.${match[1]}`;
+          await extractCompanyData(websiteUrl, emailLine);
+        }
       }
     }
-
-    // Extract company data and print the results
-    const results = await extractCompanyData(websites);
-    console.log(results);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-  }
+    catch (error) {
+      console.error(`Error: ${error.message}`);
+    }
 }
-
 main();
+  
